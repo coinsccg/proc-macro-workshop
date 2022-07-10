@@ -1,59 +1,54 @@
-// Have the macro produce a struct for the builder state, and a `builder`
-// function that creates an empty instance of the builder.
+// The std::process::Command builder handles args in a way that is potentially
+// more convenient than passing a full vector of args to the builder all at
+// once.
 //
-// As a quick start, try generating the following code (but make sure the type
-// name matches what is in the caller's input).
+// Look for a field attribute #[builder(each = "...")] on each field. The
+// generated code may assume that fields with this attribute have the type Vec
+// and should use the word given in the string literal as the name for the
+// corresponding builder method which accepts one vector element at a time.
 //
-//     impl Command {
-//         pub fn builder() {}
-//     }
+// In order for the compiler to know that these builder attributes are
+// associated with your macro, they must be declared at the entry point of the
+// derive macro. Otherwise the compiler will report them as unrecognized
+// attributes and refuse to compile the caller's code.
 //
-// At this point the test should pass because it isn't doing anything with the
-// builder yet, so `()` as the builder type is as good as any other.
+//     #[proc_macro_derive(Builder, attributes(builder))]
 //
-// Before moving on, have the macro also generate:
+// These are called inert attributes. The word "inert" indicates that these
+// attributes do not correspond to a macro invocation on their own; they are
+// simply looked at by other macro invocations.
 //
-//     pub struct CommandBuilder {
-//         executable: Option<String>,
-//         args: Option<Vec<String>>,
-//         env: Option<Vec<String>>,
-//         current_dir: Option<String>,
-//     }
-//
-// and in the `builder` function:
-//
-//     impl Command {
-//         pub fn builder() -> CommandBuilder {
-//             CommandBuilder {
-//                 executable: None,
-//                 args: None,
-//                 env: None,
-//                 current_dir: None,
-//             }
-//         }
-//     }
+// If the new one-at-a-time builder method is given the same name as the field,
+// avoid generating an all-at-once builder method for that field because the
+// names would conflict.
 //
 //
 // Resources:
 //
-//   - The Quote crate for putting together output from a macro:
-//     https://github.com/dtolnay/quote
-//
-//   - Joining together the type name + "Builder" to make the builder's name:
-//     https://docs.rs/syn/1.0/syn/struct.Ident.html
+//   - Relevant syntax tree types:
+//     https://docs.rs/syn/1.0/syn/struct.Attribute.html
+//     https://docs.rs/syn/1.0/syn/enum.Meta.html
 
 use derive_builder::Builder;
 
 #[derive(Builder)]
 pub struct Command {
     executable: String,
+    #[builder(each = "arg")]
     args: Vec<String>,
+    #[builder(each = "env")]
     env: Vec<String>,
-    current_dir: String,
+    current_dir: Option<String>,
 }
 
 fn main() {
-    let builder = Command::builder();
+    let command = Command::builder()
+        .executable("cargo".to_owned())
+        .arg("build".to_owned())
+        .arg("--release".to_owned())
+        .build()
+        .unwrap();
 
-    let _ = builder;
+    assert_eq!(command.executable, "cargo");
+    assert_eq!(command.args, vec!["build", "--release"]);
 }
